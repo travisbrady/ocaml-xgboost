@@ -1,0 +1,39 @@
+OASISFormat:        0.4
+Name:               ocaml-xgboost
+Version:            0.1
+Synopsis:           Minimal OCaml bindings to xgboost
+Authors:            Travis Brady
+License:            Apache-2.0
+LicenseFile:        LICENSE.txt
+Plugins:            META (0.4), DevFiles (0.4), StdFiles (0.4)
+XStdFilesAUTHORS:   false
+XStdFilesREADME:    false
+
+#PreBuildCommand:      ./_prebuild
+#PostInstallCommand:   ocamlfind install -add ocpm _build/lib/libcpm.so
+
+Library oxgboost
+  Path:                 lib
+  FindlibName:          oxgboost
+  BuildTools:           ocamlbuild
+  BuildDepends:         bigarray, ctypes, ctypes.foreign, threads
+  CompiledObject:       best
+  CCopt:                -g -x c++ -O2 -Wextra -Wstrict-overflow=5 -fno-strict-aliasing -Wfatal-errors -shared -fPIC
+  CClib:                -lstdc++
+  Modules:              Xgboost, Oxgboost
+
+Executable simple
+  Path:                 examples
+  BuildTools:           ocamlbuild
+  BuildDepends:         oxgboost
+  CompiledObject:       native
+  MainIs:               simple.ml
+  Install:              false
+
+Executable xor
+  Path:                 examples
+  BuildTools:           ocamlbuild
+  BuildDepends:         oxgboost
+  CompiledObject:       native
+  MainIs:               xor.ml
+  Install:              false

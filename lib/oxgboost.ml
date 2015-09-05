@@ -21,7 +21,7 @@ module Matrix = struct
         let nc = Unsigned.ULong.of_int ncols in
         let miss = -999.0 in
         let h = allocate_n ~count:1 (ptr void) in
-        let ret = _from_mat (CArray.start mat) nr nr miss h in
+        let ret = _from_mat (CArray.start mat) nr nc miss h in
         !@h
 
     let from_mat () =
@@ -128,6 +128,28 @@ module Booster = struct
     let _predict = foreign ~from
         "XGBoosterPredict"
         (t @-> Matrix.t @-> int @-> uint @-> ptr ulong @-> ptr (ptr float) @-> returning int)
+
+    let predict ?(option_mask=0) ?(ntree_limit=0) bst mat =
+        let u_ntree_limit = Unsigned.UInt.of_int ntree_limit in
+        let _, y_test_len, _ = Matrix.num_rows mat in
+        let ul = Unsigned.ULong.of_int y_test_len in
+        let u_out_len = allocate ulong ul in
+        let inner_out = allocate_n ~count:y_test_len float in
+        for i = 0 to y_test_len-1 do
+            (inner_out +@ i) <-@ 0.0
+        done;
+        let out_result = allocate (ptr float) inner_out in
+        let ret = _predict bst mat option_mask u_ntree_limit u_out_len out_result in
+        printf "[predict] ret: %d\n%!" ret;
+        let out_len = Unsigned.ULong.to_int !@u_out_len in
+        let arr = Array.make out_len 0.0 in
+        printf "[predict] nowwww LOOP %d!\n%!" out_len;
+        let rezzo = !@out_result in
+        for i = 0 to out_len-1 do
+            let res = !@(rezzo +@ i) in
+            arr.(i) <- res
+        done;
+        arr
 
     let _save_model = foreign ~from "XGBoosterSaveModel" (t @-> string @-> returning int)
 

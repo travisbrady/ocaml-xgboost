@@ -1,0 +1,42 @@
+# OASIS_START
+# DO NOT EDIT (digest: 04a8885643a63456e8daf41f4afed79d)
+# Ignore VCS directories, you can use the same kind of rule outside
+# OASIS_START/STOP if you want to exclude directories that contains
+# useless stuff for the build process
+true: annot, bin_annot
+<**/.svn>: -traverse
+<**/.svn>: not_hygienic
+".bzr": -traverse
+".bzr": not_hygienic
+".hg": -traverse
+".hg": not_hygienic
+".git": -traverse
+".git": not_hygienic
+"_darcs": -traverse
+"_darcs": not_hygienic
+# Library oxgboost
+"lib/oxgboost.cmxs": use_oxgboost
+<lib/*.ml{,i,y}>: oasis_library_oxgboost_ccopt
+<lib/oxgboost.{cma,cmxa}>: oasis_library_oxgboost_cclib
+<lib/*.ml{,i,y}>: pkg_bigarray
+<lib/*.ml{,i,y}>: pkg_ctypes
+<lib/*.ml{,i,y}>: pkg_ctypes.foreign
+<lib/*.ml{,i,y}>: pkg_threads
+# Executable simple
+"examples/simple.native": pkg_bigarray
+"examples/simple.native": pkg_ctypes
+"examples/simple.native": pkg_ctypes.foreign
+"examples/simple.native": pkg_threads
+"examples/simple.native": use_oxgboost
+# Executable xor
+"examples/xor.native": pkg_bigarray
+"examples/xor.native": pkg_ctypes
+"examples/xor.native": pkg_ctypes.foreign
+"examples/xor.native": pkg_threads
+"examples/xor.native": use_oxgboost
+<examples/*.ml{,i,y}>: pkg_bigarray
+<examples/*.ml{,i,y}>: pkg_ctypes
+<examples/*.ml{,i,y}>: pkg_ctypes.foreign
+<examples/*.ml{,i,y}>: pkg_threads
+<examples/*.ml{,i,y}>: use_oxgboost
+# OASIS_STOP

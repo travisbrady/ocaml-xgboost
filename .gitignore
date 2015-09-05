@@ -1,0 +1,7 @@
+_build/
+*.log
+*.cmo
+*.cma
+*.exe
+*.native
+setup.data

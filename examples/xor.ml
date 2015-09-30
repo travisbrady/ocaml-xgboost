@@ -96,6 +96,5 @@ let () =
         0.0; 1.0; 0.0;
         1.0; 1.0; 1.0] 5 3 in
     let y_pred = Oxgboost.Booster.predict b y_test in
-    printf "YO!\n%!";
     Array.iter (fun x -> printf "%f " x) y_pred;
     ()

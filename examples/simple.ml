@@ -7,10 +7,6 @@ let () =
     let ret, nr, x = Oxgboost.Matrix.num_rows mat in
     printf "Ret: %d NumRows: %d X: %s\n" ret nr x;
     let b = Oxgboost.Booster.create2 mat in
-    (*
-    let ret = Oxgboost.Booster._boost_update_one_iter b 1 mat in
-    printf "_boost_update_one_iter %d\n" ret;
-    *)
     printf "now set_param\n%!";
     Oxgboost.Booster.set_param b "seed" "0";
     Oxgboost.Booster.set_param b "booster" "gbtree";

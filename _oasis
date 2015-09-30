@@ -37,3 +37,19 @@ Executable xor
   CompiledObject:       native
   MainIs:               xor.ml
   Install:              false
+
+Executable boston_housing
+  Path:                 examples
+  BuildTools:           ocamlbuild
+  BuildDepends:         oxgboost
+  CompiledObject:       native
+  MainIs:               boston_housing.ml
+  Install:              false
+
+Executable agaricus
+  Path:                 examples
+  BuildTools:           ocamlbuild
+  BuildDepends:         oxgboost
+  CompiledObject:       native
+  MainIs:               agaricus.ml
+  Install:              false

@@ -1,6 +1,7 @@
 open Printf
 open Ctypes
 open Foreign
+module X=Xgboost
 
 let from = Dl.(dlopen ~filename:"libxgboostwrapper.so" ~flags:[RTLD_NOW])
 let get_last_error = foreign ~from "XGBGetLastError" (void @-> returning string)
@@ -8,20 +9,22 @@ let get_last_error = foreign ~from "XGBGetLastError" (void @-> returning string)
 module Matrix = struct
     let t = ptr void
 
-    let _create_from_csr = foreign ~from
-        "XGDMatrixCreateFromCSR"
-        (ptr ulong @-> ptr uint @-> ptr float @-> ulong @-> ulong @-> ptr t @-> returning int)
-    let _from_mat = foreign ~from
-        "XGDMatrixCreateFromMat" (ptr float @->
-                                  ulong @-> ulong @->
-                                  float @-> ptr t @-> returning int)
+    let of_bigarray ?(missing=(-999.0)) ba =
+        let nrows = Bigarray.Array2.dim1 ba in
+        let ncols = Bigarray.Array2.dim2 ba in
+        let nr = Unsigned.ULong.of_int nrows in
+        let nc = Unsigned.ULong.of_int ncols in
+        let h = allocate_n ~count:1 (ptr void) in
+        let ret = X.DMatrix.create_from_mat (bigarray_start array2 ba) nr nc missing h in
+        !@h
+
     let of_list lst nrows ncols =
         let mat = CArray.of_list float lst in
         let nr = Unsigned.ULong.of_int nrows in
         let nc = Unsigned.ULong.of_int ncols in
         let miss = -999.0 in
         let h = allocate_n ~count:1 (ptr void) in
-        let ret = _from_mat (CArray.start mat) nr nc miss h in
+        let ret = X.DMatrix.create_from_mat (CArray.start mat) nr nc miss h in
         !@h
 
     let from_mat () =
@@ -29,59 +32,75 @@ module Matrix = struct
         let nr = Unsigned.ULong.of_int 2 in
         let miss = -999.0 in
         let h = allocate_n ~count:1 (ptr void) in
-        let ret = _from_mat (CArray.start mat) nr nr miss h in
-        printf "[from_mat] RET: %d\n" ret;
+        let ret = X.DMatrix.create_from_mat (CArray.start mat) nr nr miss h in
         ret, !@h
-
-    let _from_file = foreign ~from "XGDMatrixCreateFromFile" (string @->
-        int @-> ptr t @-> returning int)
 
     let from_file fn =
         let h = allocate_n ~count:1 (ptr void) in
-        let ret = _from_file fn 0 h in
+        let ret = X.DMatrix.create_from_file fn 0 h in
         ret, !@h
-
-    let _num_rows = foreign ~from "XGDMatrixNumRow" (t @-> ptr ulong @-> returning int)
 
     let num_rows m = 
         let ul = Unsigned.ULong.of_int 99 in
         let out = allocate ulong ul in
-        let ret = _num_rows m out in
+        let ret = X.DMatrix.num_row m out in
         ret, Unsigned.ULong.to_int !@out, Unsigned.ULong.to_string !@out
 
-    let _save_binary = foreign ~from "XGDMatrixSaveBinary" (t @-> string @-> int @-> returning int)
-
     let save_binary m fn = 
-        let ret = _save_binary m fn 1 in
+        let ret = X.DMatrix.save_binary m fn 1 in
         ret
-
-    let _set_group = foreign ~from "XGDMatrixSetGroup" (t @-> ptr uint @-> ulong @-> returning int)
 
     let set_group m labels =
         let ulab = List.map (fun x -> Unsigned.UInt.of_int x) labels in
         let laba = CArray.of_list uint ulab in
         let len = Unsigned.ULong.of_int (List.length labels) in
-        _set_group m (CArray.start laba) len
-
-    let _set_float_info = foreign ~from "XGDMatrixSetFloatInfo"
-        (t @-> string @-> ptr float @-> ulong @-> returning int)
+        X.DMatrix.set_group m (CArray.start laba) len
 
     let set_label m labels =
-        printf "[set_label] INSIDE\n%!";
         let arr = CArray.start (CArray.of_list float labels) in
         let len = Unsigned.ULong.of_int (List.length labels) in
-        printf "[set_label] _set_float_info\n%!";
-        let ret = _set_float_info m "label" arr len in
-        printf "[set_label] %d\n%!" ret;
+        let ret = X.DMatrix.set_float_info m "label" arr len in
         ret
 
-    let free = foreign ~from "XGDMatrixFree" (t @-> returning int)
+    let get_float_info m field =
+        let ul = Unsigned.ULong.of_int 0 in
+        let out_ul = allocate ulong ul in
+        let out_result = allocate (ptr float) (allocate float 0.0) in
+        let rc = X.DMatrix.get_float_info m field out_ul out_result in
+        let out_len = Unsigned.ULong.to_int !@out_ul in
+        CArray.to_list (CArray.from_ptr !@out_result out_len)
+
+    let get_uint_info m field =
+        let oi = Unsigned.ULong.of_int in
+        let ul = oi 0 in
+        let out_ul = allocate ulong ul in
+        let out_result = allocate (ptr ulong) (allocate ulong (oi 0)) in
+        let rc = X.DMatrix.get_uint_info m field out_ul out_result in
+        let out_len = Unsigned.ULong.to_int !@out_ul in
+        CArray.to_list (CArray.from_ptr !@out_result out_len)
+
+    let free m = X.DMatrix.free m
 
 end
 
 module Booster = struct
     type t
     let t = ptr void
+
+    let string_of_booster_type = function
+        | `GBTree -> "gbtree"
+        | `Gblinear -> "gblinear"
+
+    let string_of_objective = function
+        | `Reg_linear -> "reg:linear"
+        | `Reg_logistic -> "reg:logistic"
+        | `Binary_logistic -> "binary:logistic"
+        | `Binary_logitraw -> "binary:logitraw"
+        | `Count_poisson -> "count:poisson"
+        | `Multi_softmax -> "multi:softmax"
+        | `Multi_softprob -> "multi:softprob"
+        | `Rank_pairwise -> "rank:pairwise"
+
     let _create = foreign ~from "XGBoosterCreate" 
         (ptr (ptr void) @->
          ulong @->
@@ -92,42 +111,21 @@ module Booster = struct
         let dmats = allocate_n ~count:1 (ptr void) in
         let len = Unsigned.ULong.of_int 0 in
         let h = allocate_n ~count:1 (ptr void) in
-        let ret = _create dmats len h in
+        let ret = X.Booster.create dmats len h in
         !@h
 
     let create2 dtrain =
         let dmats = CArray.of_list Matrix.t [dtrain] in
         let len = Unsigned.ULong.of_int 1 in
         let h = allocate_n ~count:1 (ptr void) in
-        let ret = _create (CArray.start dmats) len h in
+        let ret = X.Booster.create (CArray.start dmats) len h in
         !@h
 
-    let free = foreign ~from "XGBoosterFree" (t @-> returning int)
+    let free bst = X.Booster.free bst
 
-    let _set_param = foreign ~from 
-        "XGBoosterSetParam" 
-        (t @-> string @-> string @-> returning int)
     let set_param booster name value =
-        let ret = _set_param booster name value in
+        let ret = X.Booster.set_param booster name value in
         printf "[set_param] %s %s ret: %d\n" name value ret
-
-    let _update_one_iter = foreign ~from ~release_runtime_lock:true
-        ~check_errno:true
-        "XGBoosterUpdateOneIter"
-        (t @-> int @-> Matrix.t @-> returning int)
-
-    let _boost_one_iter = foreign ~from
-        "XGBoosterBoostOneIter"
-        (t @-> Matrix.t @-> ptr float @-> ptr float @-> ulong @-> returning int)
-
-    let _eval_one_iter = foreign ~from ~release_runtime_lock:true
-        "XGBoosterEvalOneIter"
-        (t @-> int @-> ptr Matrix.t @->
-            ptr string @-> ulong @-> ptr string @-> returning int)
-
-    let _predict = foreign ~from
-        "XGBoosterPredict"
-        (t @-> Matrix.t @-> int @-> uint @-> ptr ulong @-> ptr (ptr float) @-> returning int)
 
     let predict ?(option_mask=0) ?(ntree_limit=0) bst mat =
         let u_ntree_limit = Unsigned.UInt.of_int ntree_limit in
@@ -139,31 +137,15 @@ module Booster = struct
             (inner_out +@ i) <-@ 0.0
         done;
         let out_result = allocate (ptr float) inner_out in
-        let ret = _predict bst mat option_mask u_ntree_limit u_out_len out_result in
-        printf "[predict] ret: %d\n%!" ret;
+        let ret = X.Booster.predict bst mat option_mask u_ntree_limit u_out_len out_result in
         let out_len = Unsigned.ULong.to_int !@u_out_len in
         let arr = Array.make out_len 0.0 in
-        printf "[predict] nowwww LOOP %d!\n%!" out_len;
         let rezzo = !@out_result in
         for i = 0 to out_len-1 do
             let res = !@(rezzo +@ i) in
             arr.(i) <- res
         done;
         arr
-
-    let _save_model = foreign ~from "XGBoosterSaveModel" (t @-> string @-> returning int)
-
-    let _load_model_from_buffer = foreign ~from 
-        "XGBoosterLoadModelFromBuffer"
-        (t @-> ptr void @-> ulong @-> returning int)
-
-    let _get_model_raw = foreign ~from
-        "XGBoosterGetModelRaw"
-        (t @-> ptr ulong @-> ptr string @-> returning int)
-
-    let _dump_model = foreign ~from
-        "XGBoosterDumpModel"
-        (t @-> string @-> int @-> ptr ulong @-> ptr (ptr string) @-> returning int)
 
     let train b dtrain num_rounds =
         let dmats = CArray.start (CArray.of_list Matrix.t [dtrain]) in
@@ -172,13 +154,41 @@ module Booster = struct
         let len = Unsigned.ULong.of_int 1 in
         for i = 0 to num_rounds-1 do
             printf "[train] %d\n%!" i;
-            let ret = _update_one_iter b i dtrain in
-            printf "[_update_one_iter] %d\n%!" ret;
-            let ret = _eval_one_iter b i dmats enames len evres in
+            let ret = X.Booster.update_one_iter b i dtrain in
+            let ret = X.Booster.eval_one_iter b i dmats enames len evres in
             printf "[train] ret: %d\n %s\n%!" ret !@evres;
             ()
         done
 end
 
-module XGBoostClassifier = struct
+module XGBRegressor = struct
+    type t
+    let fit ?(n_estimators=100) ?(seed=0) ?(booster=`GBTree) ?(max_depth=3) dtrain =
+        let bst = Booster.create2 dtrain in
+        Booster.set_param bst "seed" (string_of_int seed);
+        Booster.set_param bst "booster" (Booster.string_of_booster_type booster);
+        Booster.set_param bst "objective" "reg:linear";
+        Booster.train bst dtrain n_estimators;
+        bst
+
 end
+
+module XGBEstimator = struct
+    type t
+    let fit ?(booster=`GBTree) ?(n_estimators=100) ?(max_depth=3) ?(learning_rate=0.1)
+        ?(objective=`Binary_logistic) ?(gamma=0.0) ?(min_child_weight=1.0)
+        ?(max_delta_step=0) ?(subsample=1.0) ?(colsample_bytree=1)
+        ?(base_score=0.5) ?(seed=0) dtrain =
+        let bst = Booster.create2 dtrain in
+        Booster.set_param bst "booster" (Booster.string_of_booster_type booster);
+        Booster.set_param bst "max_depth" (string_of_int max_depth);
+        Booster.set_param bst "eta" (string_of_float learning_rate);
+        Booster.set_param bst "objective" (Booster.string_of_objective objective);
+        Booster.set_param bst "gamma" (string_of_float gamma);
+        Booster.set_param bst "base_score" (string_of_float base_score);
+        Booster.set_param bst "seed" (string_of_int seed);
+        Booster.train bst dtrain n_estimators;
+        bst
+end
+
+

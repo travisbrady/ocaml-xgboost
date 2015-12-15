@@ -21,6 +21,8 @@ module DMatrix = struct
 
     let num_row = foreign ~from "XGDMatrixNumRow" (t @-> ptr ulong @-> returning int)
 
+    let num_col = foreign ~from "XGDMatrixNumCol" (t @-> ptr ulong @-> returning int)
+
     let save_binary = foreign ~from "XGDMatrixSaveBinary" (t @-> string @-> int @-> returning int)
 
     let set_group = foreign ~from "XGDMatrixSetGroup" (t @-> ptr uint @-> ulong @-> returning int)

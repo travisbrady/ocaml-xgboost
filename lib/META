@@ -1,0 +1,12 @@
+# OASIS_START
+# DO NOT EDIT (digest: ce7ed1ee7b4fd830a2c6da7179ad2217)
+version = "0.1"
+description = "Minimal OCaml bindings to xgboost"
+requires = "bigarray ctypes ctypes.foreign threads"
+archive(byte) = "oxgboost.cma"
+archive(byte, plugin) = "oxgboost.cma"
+archive(native) = "oxgboost.cmxa"
+archive(native, plugin) = "oxgboost.cmxs"
+exists_if = "oxgboost.cma"
+# OASIS_STOP
+

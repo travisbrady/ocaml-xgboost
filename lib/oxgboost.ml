@@ -46,6 +46,12 @@ module Matrix = struct
         let ret = X.DMatrix.num_row m out in
         ret, Unsigned.ULong.to_int !@out, Unsigned.ULong.to_string !@out
 
+    let num_cols m =
+        let ul = Unsigned.ULong.of_int 99 in
+        let out = allocate ulong ul in
+        let ret = X.DMatrix.num_row m out in
+        Unsigned.ULong.to_int !@out
+
     let save_binary m fn = 
         let ret = X.DMatrix.save_binary m fn 1 in
         ret
